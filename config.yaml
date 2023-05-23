@@ -1,0 +1,43 @@
+baseURL: 'https://keks.dev/'
+languageCode: en-us
+title: keks.dev
+theme: PaperMod
+minify:
+  disableXML: true
+  minifyOutput: true
+menu:
+  main:
+    - identifier: publications
+      name: publications
+      url: /publications/
+      weight: 10
+    - identifier: projects
+      name: projects
+      url: /projects/
+      weight: 10
+    - identifier: about
+      name: about
+      url: /about/
+      weight: 20
+params:
+  hideFooter: true
+  defaultTheme: auto
+  profileMode:
+    enabled: true
+    title: "<Title>" # optional default will be site title
+    subtitle: "This is subtitle"
+    imageUrl: "<image link>" # optional
+    imageTitle: "<title of image as alt>" # optional
+    imageWidth: 120 # custom size
+    imageHeight: 120 # custom size
+    buttons:
+      - name: Archive
+        url: "/archive"
+      - name: Github
+        url: "https://github.com/"
+
+    socialIcons: # optional
+        - name: "github"
+          url: "https://github.com/Schroedi"
+        - name: "<platform 2>"
+          url: "<link2>"
