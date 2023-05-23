@@ -3,15 +3,8 @@ title: "About"
 date: 2023-05-23T00:29:13+02:00
 draft: false
 ---
-## Me
+## Hi, I'm Christoph
 
-Hi, I'm Christoph.
-- Computer Science
-- Writing advanced PC game bots
-- Programming games
-- Race Drones
-- Running
-- Rock Climbing
 
 ## This site
 

@@ -25,19 +25,15 @@ params:
   profileMode:
     enabled: true
     title: "<Title>" # optional default will be site title
-    subtitle: "This is subtitle"
-    imageUrl: "<image link>" # optional
-    imageTitle: "<title of image as alt>" # optional
-    imageWidth: 120 # custom size
-    imageHeight: 120 # custom size
-    buttons:
-      - name: Archive
-        url: "/archive"
-      - name: Github
-        url: "https://github.com/"
+    subtitle: "Hi, I'm Christoph"
+    imageUrl: "me.jpg" # optional
+    imageTitle: "" # optional
+    imageWidth: 196 # custom size
+    imageHeight: 196 # custom size
 
-    socialIcons: # optional
-        - name: "github"
-          url: "https://github.com/Schroedi"
-        - name: "<platform 2>"
-          url: "<link2>"
+
+  socialIcons: # optional
+      - name: "github"
+        url: "https://github.com/Schroedi"
+      - name: "linkedin"
+        url: "https://www.linkedin.com/in/christoph-schr%C3%B6der-48520081/"
