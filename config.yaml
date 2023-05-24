@@ -22,6 +22,7 @@ menu:
 params:
   hideFooter: true
   defaultTheme: auto
+  ShowCodeCopyButtons: true
   profileMode:
     enabled: true
     title: "<Title>" # optional default will be site title
