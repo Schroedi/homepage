@@ -7,6 +7,5 @@ cover:
 ---
 
 ## Generating poems with GPT4
-This is an experiment to see how good OpenAI's GPT is at generating poems. While GTP3.5 is already able to generate poems in English, it's German works where underwhelming. The new GPT 4 is also able to generate German poems. Here is a small application built with [SvelteKit](https://kit.svelte.dev/) using the [Skeleton](skeleton.dev/) UI toolkit.
 
-A live version can be found [here](https://poems-peach.vercel.app). The output language depends on the current browser language and prompt language.
+I conducted an experiment to test OpenAI's GPT in generating poems. While GTP3.5 could create poems in English, its German creations were not as impressive. However, the latest version, GPT 4, shows potential to generate German poems. I created a [SvelteKit](https://kit.svelte.dev/) application with the [Skeleton](skeleton.dev/) UI toolkit to showcase this. You can find a live version of this application [here](https://poems-peach.vercel.app). The prompt language and the browser language determine the language of the output.
