@@ -3,3 +3,6 @@ deps:
 
 bib:
 	academic import --bibtex content/publications/publications.bib --publication-dir content/publications
+
+dev:
+	hugo server -D
