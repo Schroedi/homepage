@@ -57,7 +57,7 @@
       // Connect to WebSocket server
       function connectWebSocket() {
         // ws = new WebSocket("ws://localhost:42007");
-        ws = new WebSocket("ws://ropeserver.keks.dev");
+        ws = new WebSocket("wss://ropeserver.keks.dev");
 
         ws.onopen = () => {
           document.getElementById("status").textContent = "Connected";
