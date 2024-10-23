@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rope Physics Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/matter-js@0.19.0/build/matter.min.js"></script>
+</head>
+<body class="bg-gray-900 h-screen flex items-center justify-center">
+    <div class="text-white text-center">
+        <h1 class="text-2xl mb-4">Rope Physics Game</h1>
+        <div class="relative">
+            <canvas id="game" width="800" height="600" class="bg-black border-2 border-gray-700 rounded-lg"></canvas>
+            <div class="absolute top-4 left-4 flex gap-2">
+                <button id="resetBtn" class="bg-gray-700 px-3 py-1 rounded hover:bg-gray-600">Reset</button>
+            </div>
+        </div>
+        <div class="mt-4 text-gray-400">
+            <p>Player 1: Move mouse to control right end of rope</p>
+            <p>Player 2: Use WASD to control left end of rope</p>
+        </div>
+    </div>
+
+    <script type="module">
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              World = Matter.World,
+              Bodies = Matter.Bodies,
+              Body = Matter.Body,
+              Constraint = Matter.Constraint,
+              Vector = Matter.Vector;
+
+        // Create engine
+        const engine = Engine.create({
+            gravity: { x: 0, y: 0.5 }
+        });
+        
+        // Create renderer
+        const render = Render.create({
+            canvas: document.querySelector('#game'),
+            engine: engine,
+            options: {
+                width: 800,
+                height: 600,
+                wireframes: false,
+                background: '#000000'
+            }
+        });
+
+        // Create rope segments
+        const segments = 64;
+        const ropeSegments = [];
+        const segmentLength = 400 / segments;
+        
+        for (let i = 0; i < segments; i++) {
+            const x = 400 + (i - segments/2) * segmentLength;
+            const segment = Bodies.circle(x, 300, 2, {
+                friction: 0,
+                restitution: 0.9,
+                render: {
+                    fillStyle: '#ffffff'
+                }
+            });
+            ropeSegments.push(segment);
+        }
+
+        // Connect rope segments
+        for (let i = 0; i < segments - 1; i++) {
+            const constraint = Constraint.create({
+                bodyA: ropeSegments[i],
+                bodyB: ropeSegments[i + 1],
+                stiffness: 0.8,
+                render: {
+                    visible: true,
+                    strokeStyle: '#ffffff',
+                    lineWidth: 2
+                }
+            });
+            World.add(engine.world, constraint);
+        }
+
+        // Create ball
+        const ball = Bodies.circle(400, 200, 10, {
+            friction: 0,
+            restitution: 0.9,
+            render: {
+                fillStyle: '#00ff00'
+            }
+        });
+
+        // Create walls
+        const walls = [
+            Bodies.rectangle(400, 0, 800, 20, { isStatic: true }), // top
+            Bodies.rectangle(400, 600, 800, 20, { isStatic: true }), // bottom
+            Bodies.rectangle(0, 300, 20, 600, { isStatic: true }), // left
+            Bodies.rectangle(800, 300, 20, 600, { isStatic: true }) // right
+        ];
+
+        // Create mouse triangle
+        const mouseTriangle = Bodies.polygon(ropeSegments[segments-1].position.x, ropeSegments[segments-1].position.y, 3, 15, {
+            isStatic: true,
+            render: {
+                fillStyle: '#ffff00'
+            }
+        });
+        const mouseEndConstraint = Constraint.create({
+            bodyA: mouseTriangle,
+            bodyB: ropeSegments[segments-1],
+            stiffness: 0.1
+        });
+        World.add(engine.world, mouseEndConstraint);
+
+        // Add all bodies to world
+        World.add(engine.world, [...ropeSegments, ball, ...walls, mouseTriangle]);
+
+        // Mouse control for Player 1 (right end)
+        let mousePos = { x: 600, y: 300 };
+        render.canvas.addEventListener('mousemove', (e) => {
+            const rect = render.canvas.getBoundingClientRect();
+            mousePos = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            // Update triangle position to follow mouse
+            Body.setPosition(mouseTriangle, mousePos);
+        });
+
+        // Player 2 controls (WASD)
+        let p2Pos = { x: 200, y: 300 };
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // Game loop
+        Matter.Events.on(engine, 'beforeUpdate', () => {
+            // Update Player 2 position
+            if (keys['w']) p2Pos.y -= 5;
+            if (keys['s']) p2Pos.y += 5;
+            if (keys['a']) p2Pos.x -= 5;
+            if (keys['d']) p2Pos.x += 5;
+
+            // Constrain rope ends to player positions
+            Body.setPosition(ropeSegments[0], p2Pos);
+            // Body.setPosition(ropeSegments[segments-1], mousePos);
+
+            // Ball-rope collision detection
+            for (let i = 0; i < segments - 1; i++) {
+                const segA = ropeSegments[i];
+                const segB = ropeSegments[i + 1];
+                const normal = Vector.normalise(Vector.sub(segB.position, segA.position));
+                const ballToSegA = Vector.sub(ball.position, segA.position);
+                const projection = Vector.dot(ballToSegA, normal);
+                
+                if (projection > 0 && projection < Vector.magnitude(Vector.sub(segB.position, segA.position))) {
+                    const closest = Vector.add(segA.position, Vector.mult(normal, projection));
+                    const distance = Vector.magnitude(Vector.sub(ball.position, closest));
+                    
+                    if (distance < 20) {
+                        const impulse = Vector.mult(Vector.normalise(Vector.sub(ball.position, closest)), 5);
+                        Body.setVelocity(ball, impulse);
+                    }
+                }
+            }
+        });
+
+        // Reset button
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            Body.setPosition(ball, { x: 400, y: 200 });
+            Body.setVelocity(ball, { x: 0, y: 0 });
+        });
+
+        // Run engine and renderer
+        Engine.run(engine);
+        Render.run(render);
+    </script>
+</body>
+</html>
