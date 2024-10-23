@@ -1,178 +1,396 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rope Physics Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/matter-js@0.19.0/build/matter.min.js"></script>
-</head>
-<body class="bg-gray-900 h-screen flex items-center justify-center">
+    <script src="https://unpkg.com/matter-js@0.20.0/build/matter.min.js"></script>
+  </head>
+  <body class="bg-gray-900 h-screen flex items-center justify-center">
     <div class="text-white text-center">
-        <h1 class="text-2xl mb-4">Rope Physics Game</h1>
-        <div class="relative">
-            <canvas id="game" width="800" height="600" class="bg-black border-2 border-gray-700 rounded-lg"></canvas>
-            <div class="absolute top-4 left-4 flex gap-2">
-                <button id="resetBtn" class="bg-gray-700 px-3 py-1 rounded hover:bg-gray-600">Reset</button>
-            </div>
+      <h1 class="text-2xl mb-4">Rope Physics Game</h1>
+      <div id="status" class="text-yellow-500 mb-2">Connecting...</div>
+      <div id="role" class="text-blue-500 mb-2">Waiting...</div>
+      <div class="relative">
+        <canvas
+          id="game"
+          width="800"
+          height="600"
+          class="bg-black border-2 border-gray-700 rounded-lg"
+        ></canvas>
+        <div class="absolute top-4 left-4 flex gap-2">
+          <button
+            id="resetBtn"
+            class="bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+          >
+            Reset
+          </button>
         </div>
-        <div class="mt-4 text-gray-400">
-            <p>Player 1: Move mouse to control right end of rope</p>
-            <p>Player 2: Use WASD to control left end of rope</p>
-        </div>
+      </div>
+      <div class="mt-4 text-gray-400">
+        <p>Host: Move mouse to control right end of rope</p>
+        <p>Client: Move mouse to control left end of rope</p>
+      </div>
     </div>
 
     <script type="module">
-        const Engine = Matter.Engine,
-              Render = Matter.Render,
-              World = Matter.World,
-              Bodies = Matter.Bodies,
-              Body = Matter.Body,
-              Constraint = Matter.Constraint,
-              Vector = Matter.Vector;
+      const Engine = Matter.Engine,
+        Render = Matter.Render,
+        World = Matter.World,
+        Bodies = Matter.Bodies,
+        Body = Matter.Body,
+        Constraint = Matter.Constraint,
+        Vector = Matter.Vector,
+        Runner = Matter.Runner;
 
-        // Create engine
-        const engine = Engine.create({
-            gravity: { x: 0, y: 0.5 }
-        });
-        
-        // Create renderer
-        const render = Render.create({
-            canvas: document.querySelector('#game'),
-            engine: engine,
-            options: {
-                width: 800,
-                height: 600,
-                wireframes: false,
-                background: '#000000'
-            }
-        });
+      let ws;
+      let clientId;
+      let isHost = false;
+      let hostId = null;
 
-        // Create rope segments
-        const segments = 64;
-        const ropeSegments = [];
-        const segmentLength = 400 / segments;
-        
-        for (let i = 0; i < segments; i++) {
-            const x = 400 + (i - segments/2) * segmentLength;
-            const segment = Bodies.circle(x, 300, 2, {
-                friction: 0,
-                restitution: 0.9,
-                render: {
-                    fillStyle: '#ffffff'
+      // Add these constants near the top of your script
+      const TICK_RATE = 60;
+      let serverTime = 0;
+      let latency = 0;
+
+      // Connect to WebSocket server
+      function connectWebSocket() {
+        // ws = new WebSocket("ws://localhost:42007");
+        ws = new WebSocket("ws://ropeserver.keks.dev");
+
+        ws.onopen = () => {
+          document.getElementById("status").textContent = "Connected";
+          console.log("Connected to WebSocket server");
+        };
+
+        ws.onclose = () => {
+          document.getElementById("status").textContent = "Disconnected";
+          console.log("Disconnected from WebSocket server");
+          setTimeout(connectWebSocket, 1000);
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "init") {
+            clientId = data.clientId;
+            hostId = data.hostId;
+            isHost = clientId === hostId;
+
+            // Update role display
+            const roleElement = document.getElementById("role");
+            roleElement.textContent = isHost
+              ? `Role: Host (Right End) - ID: ${clientId}`
+              : `Role: Client (Left End) - ID: ${clientId}`;
+            console.log(
+              `Initialized as ${
+                isHost ? "host" : "client"
+              } with ID: ${clientId}`
+            );
+
+            // Set initial ball position
+            Body.setPosition(ball, data.gameState.ball);
+          } else if (data.type === "gameState") {
+            // Calculate latency
+            latency = Date.now() - data.timestamp;
+            serverTime = data.serverTime;
+
+            // Update host status
+            hostId = data.hostId;
+            isHost = clientId === hostId;
+
+            // Update role display if host status changed
+            const roleElement = document.getElementById("role");
+            roleElement.textContent = isHost
+              ? `Role: Host (Right End) - ID: ${clientId}`
+              : `Role: Client (Left End) - ID: ${clientId}`;
+
+            // Update other player's position
+            Object.entries(data.gameState.players).forEach(([id, pos]) => {
+              const lastKnownPosition = isHost
+                ? mousePos
+                : clientTriangle.position;
+              // estimate from our last known position and the time since last update
+              const estimatedVelocity = Vector.mult(
+                Vector.sub(pos, lastKnownPosition),
+                TICK_RATE / 1000
+              );
+              const predictedPosition = Vector.add(
+                pos,
+                Vector.mult(estimatedVelocity, latency / 1000)
+              );
+              if (id !== clientId) {
+                if (isHost) {
+                  // Update left end position from client
+                  Body.setPosition(clientTriangle, predictedPosition);
+                } else {
+                  // Update right end position from host
+                  Body.setPosition(mouseTriangle, predictedPosition);
                 }
+              }
             });
-            ropeSegments.push(segment);
+
+            if (!isHost) {
+              // Set ball position with latency compensation
+              const predictedPosition = Vector.add(
+                data.gameState.ball,
+                Vector.mult(data.gameState.ballVelocity, latency / 1000)
+              );
+              Body.setPosition(ball, predictedPosition);
+              Body.setVelocity(ball, data.gameState.ballVelocity);
+              Body.setAngularVelocity(ball, data.gameState.ballAngularVelocity);
+              const predictedAngle =
+                data.gameState.ballAngle +
+                (data.gameState.ballAngularVelocity * latency) / 1000;
+              Body.setAngle(ball, predictedAngle);
+
+              // Update rope segments with prediction
+              data.gameState.ropeSegments.forEach((segmentState, i) => {
+                const segment = ropeSegments[i];
+
+                // Predict position based on velocity and latency
+                const predictedPosition = Vector.add(
+                  segmentState.position,
+                  Vector.mult(segmentState.velocity, latency / 1000)
+                );
+
+                // Predict angle based on angular velocity and latency
+                const predictedAngle =
+                  segmentState.angle +
+                  (segmentState.angularVelocity * latency) / 1000;
+
+                Body.setPosition(segment, predictedPosition);
+                Body.setVelocity(segment, segmentState.velocity);
+                Body.setAngle(segment, predictedAngle);
+                Body.setAngularVelocity(segment, segmentState.angularVelocity);
+              });
+            }
+          }
+        };
+      }
+
+      connectWebSocket();
+
+      // Create engine
+      const engine = Engine.create({
+        gravity: { x: 0, y: 0.5 },
+
+      });
+
+      // Create renderer
+      const render = Render.create({
+        canvas: document.querySelector("#game"),
+        engine: engine,
+        options: {
+          width: 800,
+          height: 600,
+          wireframes: false,
+          background: "#000000",
+        },
+      });
+
+      // Create rope segments
+      const segments = 32;
+      const ropeSegments = [];
+      const segmentLength = 400 / segments;
+
+      for (let i = 0; i < segments; i++) {
+        const x = 400 + (i - segments / 8) * segmentLength;
+        const segment = Bodies.circle(x, 300, 8, {
+          friction: 0,
+          restitution: 0.9,
+          render: {
+            fillStyle: "#ffffff",
+          },
+        });
+        ropeSegments.push(segment);
+      }
+
+      // Connect rope segments
+      for (let i = 0; i < segments - 1; i++) {
+        const constraint = Constraint.create({
+          bodyA: ropeSegments[i],
+          bodyB: ropeSegments[i + 1],
+          stiffness: 0.99,
+          render: {
+            visible: false,
+            strokeStyle: "#ffffff",
+            lineWidth: 2,
+          },
+        });
+        World.add(engine.world, constraint);
+      }
+
+      // Create ball with continuous collision detection
+      const ball = Bodies.circle(400, 200, 10, {
+        friction: 0,
+        frictionAir: 0,
+        // mass: 0.01,
+        restitution: 0.9,
+        render: {
+          fillStyle: "#00ff00",
+        },
+      });
+
+      // Create walls
+      const walls = [
+        Bodies.rectangle(400, 0, 800, 20, { isStatic: true }), // top
+        Bodies.rectangle(400, 600, 800, 20, { isStatic: true }), // bottom
+        Bodies.rectangle(0, 300, 20, 600, { isStatic: true }), // left
+        Bodies.rectangle(800, 300, 20, 600, { isStatic: true }), // right
+      ];
+
+      // Create mouse triangle
+      const mouseTriangle = Bodies.polygon(
+        ropeSegments[segments - 1].position.x,
+        ropeSegments[segments - 1].position.y,
+        3,
+        15,
+        {
+          isStatic: true,
+          render: {
+            fillStyle: "#ffff00",
+          },
+        }
+      );
+      const mouseEndConstraint = Constraint.create({
+        bodyA: mouseTriangle,
+        bodyB: ropeSegments[segments - 1],
+        stiffness: 0.01,
+      });
+      World.add(engine.world, mouseEndConstraint);
+
+      // Create client triangle proxy
+      const clientTriangle = Bodies.polygon(
+        ropeSegments[0].position.x,
+        ropeSegments[0].position.y,
+        3,
+        15,
+        {
+          isStatic: true,
+          render: {
+            fillStyle: "#ff00ff", // Different color to distinguish from host
+          },
+        }
+      );
+      const clientEndConstraint = Constraint.create({
+        bodyA: clientTriangle,
+        bodyB: ropeSegments[0],
+        stiffness: 0.01,
+      });
+      World.add(engine.world, clientEndConstraint);
+      World.add(engine.world, clientTriangle);
+
+      // Add all bodies to world
+      World.add(engine.world, [
+        ...ropeSegments,
+        ball,
+        ...walls,
+        mouseTriangle,
+        clientTriangle,
+      ]);
+
+      // Mouse control for Player 1 (right end)
+      let mousePos = { x: 600, y: 300 };
+      render.canvas.addEventListener("mousemove", (e) => {
+        const rect = render.canvas.getBoundingClientRect();
+        mousePos = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+      });
+
+      // Game loop
+      Matter.Events.on(engine, "beforeUpdate", () => {
+        console.log("beforeUpdate");
+        // Apply input immediately for responsive feel
+        if (isHost) {
+          Body.setPosition(mouseTriangle, mousePos);
+        } else {
+          Body.setPosition(clientTriangle, mousePos);
         }
 
-        // Connect rope segments
+        // Ball-rope collision detection
         for (let i = 0; i < segments - 1; i++) {
-            const constraint = Constraint.create({
-                bodyA: ropeSegments[i],
-                bodyB: ropeSegments[i + 1],
-                stiffness: 0.8,
-                render: {
-                    visible: true,
-                    strokeStyle: '#ffffff',
-                    lineWidth: 2
-                }
-            });
-            World.add(engine.world, constraint);
+          const segA = ropeSegments[i];
+          const segB = ropeSegments[i + 1];
+          const normal = Vector.normalise(
+            Vector.sub(segB.position, segA.position)
+          );
+          const ballToSegA = Vector.sub(ball.position, segA.position);
+          const projection = Vector.dot(ballToSegA, normal);
+
+          if (
+            projection > 0 &&
+            projection <
+              Vector.magnitude(Vector.sub(segB.position, segA.position))
+          ) {
+            const closest = Vector.add(
+              segA.position,
+              Vector.mult(normal, projection)
+            );
+            const distance = Vector.magnitude(
+              Vector.sub(ball.position, closest)
+            );
+
+            // if (distance < 20) {
+            //   const impulse = Vector.mult(
+            //     Vector.normalise(Vector.sub(ball.position, closest)),
+            //     5
+            //   );
+            //   Body.setVelocity(ball, impulse);
+            // }
+          }
         }
 
-        // Create ball
-        const ball = Bodies.circle(400, 200, 10, {
-            friction: 0,
-            restitution: 0.9,
-            render: {
-                fillStyle: '#00ff00'
-            }
-        });
+        // Send position updates
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const updateData = {
+            type: "playerUpdate",
+            clientId: clientId,
+            position: mousePos,
+            velocity: mouseTriangle.velocity,
+            timestamp: Date.now(),
+          };
+          ws.send(JSON.stringify(updateData));
 
-        // Create walls
-        const walls = [
-            Bodies.rectangle(400, 0, 800, 20, { isStatic: true }), // top
-            Bodies.rectangle(400, 600, 800, 20, { isStatic: true }), // bottom
-            Bodies.rectangle(0, 300, 20, 600, { isStatic: true }), // left
-            Bodies.rectangle(800, 300, 20, 600, { isStatic: true }) // right
-        ];
-
-        // Create mouse triangle
-        const mouseTriangle = Bodies.polygon(ropeSegments[segments-1].position.x, ropeSegments[segments-1].position.y, 3, 15, {
-            isStatic: true,
-            render: {
-                fillStyle: '#ffff00'
-            }
-        });
-        const mouseEndConstraint = Constraint.create({
-            bodyA: mouseTriangle,
-            bodyB: ropeSegments[segments-1],
-            stiffness: 0.1
-        });
-        World.add(engine.world, mouseEndConstraint);
-
-        // Add all bodies to world
-        World.add(engine.world, [...ropeSegments, ball, ...walls, mouseTriangle]);
-
-        // Mouse control for Player 1 (right end)
-        let mousePos = { x: 600, y: 300 };
-        render.canvas.addEventListener('mousemove', (e) => {
-            const rect = render.canvas.getBoundingClientRect();
-            mousePos = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
+          if (isHost) {
+            const ballData = {
+              type: "ballUpdate",
+              position: ball.position,
+              velocity: ball.velocity,
+              angularVelocity: ball.angularVelocity,
+              angle: ball.angle,
+              ropeSegments: ropeSegments.map((segment) => ({
+                position: segment.position,
+                velocity: segment.velocity,
+                angle: segment.angle,
+                angularVelocity: segment.angularVelocity,
+              })),
+              timestamp: Date.now(),
             };
-            // Update triangle position to follow mouse
-            Body.setPosition(mouseTriangle, mousePos);
-        });
+            ws.send(JSON.stringify(ballData));
+          }
+        }
+      });
 
-        // Player 2 controls (WASD)
-        let p2Pos = { x: 200, y: 300 };
-        const keys = {};
-        window.addEventListener('keydown', (e) => keys[e.key] = true);
-        window.addEventListener('keyup', (e) => keys[e.key] = false);
+      // Reset button
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        if (isHost) {
+          Body.setPosition(ball, { x: 400, y: 200 });
+          Body.setVelocity(ball, { x: 0, y: 0 });
+        }
+      });
 
-        // Game loop
-        Matter.Events.on(engine, 'beforeUpdate', () => {
-            // Update Player 2 position
-            if (keys['w']) p2Pos.y -= 5;
-            if (keys['s']) p2Pos.y += 5;
-            if (keys['a']) p2Pos.x -= 5;
-            if (keys['d']) p2Pos.x += 5;
-
-            // Constrain rope ends to player positions
-            Body.setPosition(ropeSegments[0], p2Pos);
-            // Body.setPosition(ropeSegments[segments-1], mousePos);
-
-            // Ball-rope collision detection
-            for (let i = 0; i < segments - 1; i++) {
-                const segA = ropeSegments[i];
-                const segB = ropeSegments[i + 1];
-                const normal = Vector.normalise(Vector.sub(segB.position, segA.position));
-                const ballToSegA = Vector.sub(ball.position, segA.position);
-                const projection = Vector.dot(ballToSegA, normal);
-                
-                if (projection > 0 && projection < Vector.magnitude(Vector.sub(segB.position, segA.position))) {
-                    const closest = Vector.add(segA.position, Vector.mult(normal, projection));
-                    const distance = Vector.magnitude(Vector.sub(ball.position, closest));
-                    
-                    if (distance < 20) {
-                        const impulse = Vector.mult(Vector.normalise(Vector.sub(ball.position, closest)), 5);
-                        Body.setVelocity(ball, impulse);
-                    }
-                }
-            }
-        });
-
-        // Reset button
-        document.getElementById('resetBtn').addEventListener('click', () => {
-            Body.setPosition(ball, { x: 400, y: 200 });
-            Body.setVelocity(ball, { x: 0, y: 0 });
-        });
-
-        // Run engine and renderer
-        Engine.run(engine);
-        Render.run(render);
+      // Run engine and renderer
+      // create runner
+      const runner = Runner.create({
+        delta: 1000 / 120,
+        isFixed: true,
+      });
+      Runner.run(runner, engine);
+      Render.run(render);
     </script>
-</body>
+  </body>
 </html>
