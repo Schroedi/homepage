@@ -101,6 +101,10 @@
         border-radius: 10px;
         z-index: 1;
       }
+
+      .playable {
+        background-color: #90EE90; /* Light green */
+      }
     </style>
   </head>
   <body>
@@ -120,11 +124,11 @@
         <div>Player 2: <span id="score2">0</span></div>
       </div>
       <button id="startButton">Start Game</button>
-      <button id="nextRoundButton" style="display: none">Next Round</button>
     </div>
 
     <script>
       const sequenceLength = 2;
+      let currentSequenceLength = sequenceLength;
       let sequence = [];
       let player1Input = [];
       let player2Input = [];
@@ -140,7 +144,6 @@
       const grid2 = document.getElementById("grid2");
       const message = document.getElementById("message");
       const startButton = document.getElementById("startButton");
-      const nextRoundButton = document.getElementById("nextRoundButton");
       const score1Element = document.getElementById("score1");
       const score2Element = document.getElementById("score2");
 
@@ -164,7 +167,6 @@
       }
 
       startButton.addEventListener("click", startGame);
-      nextRoundButton.addEventListener("click", resetGame);
 
       function startGame() {
         startButton.style.display = "none";
@@ -175,7 +177,7 @@
 
       function generateSequence() {
         sequence = [];
-        for (let i = 0; i < sequenceLength; i++) {
+        for (let i = 0; i < currentSequenceLength; i++) {
           const randomIndex = Math.floor(Math.random() * 9);
           sequence.push(randomIndex);
         }
@@ -194,6 +196,7 @@
         message.textContent = "Go!";
         gameStarted = true;
         startTime = new Date();
+        document.body.classList.add('playable');
       }
 
       function highlightCell(cell) {
@@ -237,7 +240,7 @@
         const grid = player === 1 ? grid1 : grid2;
 
         // Prevent adding more inputs if the player has already completed their sequence
-        if (playerInput.length >= sequenceLength) return;
+        if (playerInput.length >= currentSequenceLength) return;
 
         playerInput.push(index);
         console.log(`Player ${player} clicked: ${index}`);
@@ -247,7 +250,7 @@
         highlightCell(grid.children[index]);
         setTimeout(() => unhighlightCell(grid.children[index]), 200);
 
-        if (playerInput.length === sequenceLength) {
+        if (playerInput.length === currentSequenceLength) {
           const endTime = new Date();
           const timeTaken = endTime - startTime;
           const isCorrect = arraysEqual(playerInput, sequence);
@@ -283,6 +286,7 @@
 
         if (player1Time !== null && player2Time !== null) {
           gameStarted = false;
+          document.body.classList.remove('playable');
           console.log("Both players finished!");
 
           // Remove any existing animation classes
@@ -314,7 +318,11 @@
             grid1.classList.add("winner-flash");
             grid2.classList.add("winner-flash");
           }
-          nextRoundButton.style.display = "block";
+          currentSequenceLength++;
+          setTimeout(() => {
+            resetGame();
+            startGame();
+          }, 2000);
         }
       }
 
@@ -324,12 +332,17 @@
         player1Time = null;
         player2Time = null;
         message.textContent = "Prepare to Play!";
-        nextRoundButton.style.display = "none";
-        startButton.style.display = "block";
-
+        
         // Remove animation classes on reset
         grid1.classList.remove("winner-flash", "loser-flash");
         grid2.classList.remove("winner-flash", "loser-flash");
+        
+        // Update sequence generation to use current length
+        sequence = [];
+        for (let i = 0; i < currentSequenceLength; i++) {
+          const randomIndex = Math.floor(Math.random() * 9);
+          sequence.push(randomIndex);
+        }
       }
 
       function arraysEqual(a1, a2) {
