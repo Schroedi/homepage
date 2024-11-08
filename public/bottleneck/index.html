@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera with Flashlight</title>
+</head>
+<body>
+    <video id="video" width="320" height="240" autoplay></video>
+    <button onclick="toggleFlashlight()">Toggle Flashlight</button>
+    <script>
+        let video = document.getElementById('video');
+        let track = null;
+        let imageCapture;
+
+        // Access the camera and start video stream
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                track = stream.getVideoTracks()[0];
+                imageCapture = new ImageCapture(track);
+            })
+            .catch(error => {
+                console.error('Error accessing the media devices.', error);
+            });
+
+        function toggleFlashlight() {
+            if (track && track.getCapabilities().torch) {
+                let torchStatus = track.getSettings().torch;
+                track.applyConstraints({
+                    advanced: [{torch: !torchStatus}]
+                });
+            }
+        }
+    </script>
+</body>
+</html>
