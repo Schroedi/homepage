@@ -12,7 +12,11 @@
         let imageCapture;
 
         // Access the camera and start video stream
-        navigator.mediaDevices.getUserMedia({ video: true })
+        navigator.mediaDevices.getUserMedia({ 
+            video: {
+                facingMode: "environment" // 'environment' means rear camera, 'user' means front camera
+            }
+        })
             .then(stream => {
                 video.srcObject = stream;
                 track = stream.getVideoTracks()[0];
