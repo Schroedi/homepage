@@ -6,10 +6,12 @@
 <body>
     <video id="video" width="320" height="240" autoplay></video>
     <button onclick="toggleFlashlight()">Toggle Flashlight</button>
+    <button onclick="stopVideo()">Stop Camera</button>
     <script>
         let video = document.getElementById('video');
         let track = null;
         let imageCapture;
+        let stream = null;
 
         // Access the camera and start video stream
         navigator.mediaDevices.getUserMedia({ 
@@ -17,7 +19,8 @@
                 facingMode: "environment" // 'environment' means rear camera, 'user' means front camera
             }
         })
-            .then(stream => {
+            .then(mediaStream => {
+                stream = mediaStream;
                 video.srcObject = stream;
                 track = stream.getVideoTracks()[0];
                 imageCapture = new ImageCapture(track);
@@ -32,6 +35,15 @@
                 track.applyConstraints({
                     advanced: [{torch: !torchStatus}]
                 });
+            }
+        }
+
+        function stopVideo() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                stream = null;
+                track = null;
             }
         }
     </script>
