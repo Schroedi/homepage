@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Two Player Grid Game</title>
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .grids {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 50px);
+        grid-template-rows: repeat(3, 50px);
+        gap: 5px;
+        margin: 20px;
+      }
+      .cell {
+        width: 50px;
+        height: 50px;
+        background-color: lightgray;
+        text-align: center;
+        vertical-align: middle;
+        line-height: 50px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .highlight {
+        background-color: yellow;
+      }
+      #startButton,
+      #nextRoundButton {
+        margin: 10px;
+        padding: 10px 20px;
+        font-size: 16px;
+      }
+      #message {
+        font-size: 24px;
+        margin: 20px;
+      }
+      .winner-flash {
+        animation: flash 0.5s 3;
+      }
+
+      @keyframes flash {
+        0% {
+          background-color: lightgray;
+        }
+        50% {
+          background-color: #4caf50;
+        }
+        100% {
+          background-color: lightgray;
+        }
+      }
+
+      .loser-flash {
+        animation: flash-red 0.5s 3;
+      }
+
+      @keyframes flash-red {
+        0% {
+          background-color: lightgray;
+        }
+        50% {
+          background-color: #ff4444;
+        }
+        100% {
+          background-color: lightgray;
+        }
+      }
+
+      #scores {
+        font-size: 24px;
+        margin: 20px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="message">Prepare to Play!</div>
+    <div id="scores">
+      <div>Player 1: <span id="score1">0</span></div>
+      <div>Player 2: <span id="score2">0</span></div>
+    </div>
+    <button id="startButton">Start Game</button>
+    <div class="grids">
+      <div id="grid1" class="grid">
+        <!-- Player 1 Grid Cells -->
+      </div>
+      <div id="grid2" class="grid">
+        <!-- Player 2 Grid Cells -->
+      </div>
+    </div>
+    <button id="nextRoundButton" style="display: none">Next Round</button>
+
+    <script>
+      const sequenceLength = 2;
+      let sequence = [];
+      let player1Input = [];
+      let player2Input = [];
+      let player1Time = null;
+      let player2Time = null;
+      let gameStarted = false;
+      let startTime;
+      let score1 = 0;
+      let score2 = 0;
+
+      const grid1 = document.getElementById("grid1");
+      const grid2 = document.getElementById("grid2");
+      const message = document.getElementById("message");
+      const startButton = document.getElementById("startButton");
+      const nextRoundButton = document.getElementById("nextRoundButton");
+      const score1Element = document.getElementById("score1");
+      const score2Element = document.getElementById("score2");
+
+      // Initialize grids for both players
+      for (let i = 0; i < 9; i++) {
+        // Player 1 Cells
+        const cell1 = document.createElement("div");
+        cell1.classList.add("cell");
+        cell1.dataset.index = i;
+        cell1.addEventListener("click", () => playerCellClicked(1, i));
+        grid1.appendChild(cell1);
+
+        // Player 2 Cells
+        const cell2 = document.createElement("div");
+        cell2.classList.add("cell");
+        cell2.dataset.index = i;
+        cell2.addEventListener("click", () => playerCellClicked(2, i));
+        grid2.appendChild(cell2);
+      }
+
+      startButton.addEventListener("click", startGame);
+      nextRoundButton.addEventListener("click", resetGame);
+
+      function startGame() {
+        startButton.style.display = "none";
+        message.textContent = "Watch the Sequence!";
+        generateSequence();
+        highlightSequence();
+      }
+
+      function generateSequence() {
+        sequence = [];
+        for (let i = 0; i < sequenceLength; i++) {
+          const randomIndex = Math.floor(Math.random() * 9);
+          sequence.push(randomIndex);
+        }
+      }
+
+      async function highlightSequence() {
+        await sleep(1000);
+        for (const index of sequence) {
+          highlightCell(grid1.children[index]);
+          highlightCell(grid2.children[index]);
+          await sleep(600);
+          unhighlightCell(grid1.children[index]);
+          unhighlightCell(grid2.children[index]);
+          await sleep(200);
+        }
+        message.textContent = "Go!";
+        gameStarted = true;
+        startTime = new Date();
+      }
+
+      function highlightCell(cell) {
+        cell.classList.add("highlight");
+      }
+
+      function unhighlightCell(cell) {
+        cell.classList.remove("highlight");
+      }
+
+      function playerCellClicked(player, index) {
+        if (!gameStarted) return;
+
+        const playerInput = player === 1 ? player1Input : player2Input;
+        const grid = player === 1 ? grid1 : grid2;
+
+        playerInput.push(index);
+        console.log(`Player ${player} clicked: ${index}`);
+        console.log(`Player ${player} sequence so far:`, playerInput);
+        console.log(`Expected sequence:`, sequence);
+
+        highlightCell(grid.children[index]);
+        setTimeout(() => unhighlightCell(grid.children[index]), 200);
+
+        if (playerInput.length === sequenceLength) {
+          const endTime = new Date();
+          const timeTaken = endTime - startTime;
+          const isCorrect = arraysEqual(playerInput, sequence);
+          console.log(
+            `Player ${player} finished. Time: ${timeTaken}ms, Correct: ${isCorrect}`
+          );
+
+          if (isCorrect) {
+            if (player === 1) {
+              player1Time = timeTaken;
+              player2Time = Infinity;
+            } else {
+              player2Time = timeTaken;
+              player2Time = Infinity;
+            }
+          } else {
+            if (player === 1) {
+              player1Time = Infinity;
+            } else {
+              player2Time = Infinity;
+            }
+          }
+          console.log(`Current times - P1: ${player1Time}, P2: ${player2Time}, [${isCorrect}]`);
+          checkGameOver();
+        }
+      }
+
+      function checkGameOver() {
+        console.log("Checking game over...");
+        console.log(
+          `Player 1 Time: ${player1Time}, Player 2 Time: ${player2Time}`
+        );
+
+        if (player1Time !== null && player2Time !== null) {
+          gameStarted = false;
+          console.log("Both players finished!");
+
+          // Remove any existing animation classes
+          grid1.classList.remove("winner-flash", "loser-flash");
+          grid2.classList.remove("winner-flash", "loser-flash");
+
+          if (player1Time < player2Time && player1Time !== Infinity) {
+            console.log("Player 1 wins!");
+            message.textContent = "Player 1 Wins This Round!";
+            score1++;
+            score1Element.textContent = score1.toString(); // Ensure it's a string
+            grid1.classList.add("winner-flash");
+            grid2.classList.add("loser-flash");
+          } else if (player2Time < player1Time && player2Time !== Infinity) {
+            console.log("Player 2 wins!");
+            message.textContent = "Player 2 Wins This Round!";
+            score2++;
+            score2Element.textContent = score2.toString(); // Ensure it's a string
+            grid2.classList.add("winner-flash");
+            grid1.classList.add("loser-flash");
+          } else if (player1Time === Infinity && player2Time === Infinity) {
+            console.log("Both players wrong!");
+            message.textContent = "Both Players Wrong!";
+            grid1.classList.add("loser-flash");
+            grid2.classList.add("loser-flash");
+          } else if (player1Time === player2Time) {
+            console.log("Tie!");
+            message.textContent = "It's a Tie!";
+            grid1.classList.add("winner-flash");
+            grid2.classList.add("winner-flash");
+          }
+          nextRoundButton.style.display = "block";
+        }
+      }
+
+      function resetGame() {
+        player1Input = [];
+        player2Input = [];
+        player1Time = null;
+        player2Time = null;
+        message.textContent = "Prepare to Play!";
+        nextRoundButton.style.display = "none";
+        startButton.style.display = "block";
+
+        // Remove animation classes on reset
+        grid1.classList.remove("winner-flash", "loser-flash");
+        grid2.classList.remove("winner-flash", "loser-flash");
+      }
+
+      function arraysEqual(a1, a2) {
+        const equal = JSON.stringify(a1) === JSON.stringify(a2);
+        console.log("Comparing arrays:", a1, a2, "Equal:", equal);
+        return equal;
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+    </script>
+  </body>
+</html>
